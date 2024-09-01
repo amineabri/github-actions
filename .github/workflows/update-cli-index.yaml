@@ -15,7 +15,7 @@ on:
         description: "Repository where index should be updated. Default: ankorstore/ankor-index"
         required: false
         type: string
-        default: 'ankorstore/ankor-index'
+        default: 'amineabri/ankor-index'
       templatePath:
         description: "The template file to be replaced: Default: hack/manifest.yaml"
         required: false
