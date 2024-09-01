@@ -1,0 +1,80 @@
+name: update-cli-index
+
+on:
+  workflow_call:
+    inputs:
+      pluginName:
+        description: "Name of the plugin: E.g: devspace"
+        required: true
+        type: string
+      tagName:
+        description: "The release tag: E.g: v0.0.1"
+        required: true
+        type: string
+      indexRepository:
+        description: "Repository where index should be updated. Default: ankorstore/ankor-index"
+        required: false
+        type: string
+        default: 'ankorstore/ankor-index'
+      templatePath:
+        description: "The template file to be replaced: Default: hack/manifest.yaml"
+        required: false
+        type: string
+        default: hack/manifest.yaml
+
+env:
+  GIT_USER_NAME: ${{ secrets.GIT_USER_NAME }}
+  GIT_USER_EMAIL: ${{ secrets.GIT_USER_EMAIL }}
+  BRANCH_NAME: "${{ inputs.pluginName }}-${{ inputs.tagName }}"
+  TEMPLATE_FILE: "plugin-repo/${{ inputs.templatePath }}"
+  UPDATED_FILE: "plugins/${{ inputs.pluginName }}.yaml"
+  GH_TOKEN: ${{ secrets.PAT }}
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Plugin Repository
+        uses: actions/checkout@v3
+        with:
+          ref: main
+          fetch-depth: 1
+          path: 'plugin-repo'
+
+      - name: Checkout Plugin Index Repository
+        uses: actions/checkout@v3
+        with:
+          repository: amineabri/ankor-index
+          ref: main
+#          ssh-key: ${{ secrets.TECH_CI_SSH_KEY }}
+#          ssh-known-hosts: ${{ secrets.SSH_KNOWN_HOSTS_GITHUB_COM }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+          path: 'index-repo'
+
+      - name: List Repos
+        run: | 
+          ls -la
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "${{ env.GIT_USER_EMAIL }}"
+          git config --global user.name "${{ env.GIT_USER_NAME }}"
+
+      - name: Update plugin Manifest
+        run: |
+          sed -e 's#{{ .TagName }}#${{ inputs.tagName }}#g' ${{ env.TEMPLATE_FILE }} > index-repo/${{ env.UPDATED_FILE }}
+
+      - name: Commit/Push Changes
+        run: |
+          cd index-repo
+          git checkout -b ${{ env.BRANCH_NAME }}
+          git add ${{ env.UPDATED_FILE }}
+          git commit -m "chore: Auto updating ${{ inputs.pluginName }}.yaml due to release ${{ inputs.tagName }}"
+          git push --set-upstream origin ${{ env.BRANCH_NAME }}
+
+      - name: Generate PR
+        run: |
+          cd index-repo
+          gh pr create --base main --title "Auto update ${{ inputs.pluginName }} plugin to version ${{ inputs.tagName }}" --body "" --label "auto-generated"
+
